@@ -239,6 +239,10 @@ def handle_unknown(message):
     logger.info(f"Неизвестное сообщение от {message.from_user.id}: {message.text}")
     bot.send_message(message.chat.id, "Используйте кнопки меню для работы с ботом.")
 
+# Логируем количество зарегистрированных обработчиков после их определения
+logger.info(f"Всего обработчиков сообщений: {len(bot.message_handlers)}")
+logger.info(f"Всего callback-обработчиков: {len(bot.callback_query_handlers)}")
+
 # --- Flask маршруты ---
 @app.route("/", methods=["GET"])
 def health():
@@ -253,12 +257,17 @@ def webhook():
 
     try:
         json_str = request.get_data().decode("utf-8")
-        logger.info(f"Полный JSON: {json_str}")  # выводим полностью
+        logger.info(f"Полный JSON: {json_str}")
         update = Update.de_json(json_str)
-        logger.info(f"Update объект: {update}")  # объект целиком
-        logger.info(f"Тип update: {type(update)}")
-        if update.message:
-            logger.info(f"Сообщение от {update.message.from_user.id}: {update.message.text}")
+        logger.info("Update объект создан")
+
+        # Если это сообщение с командой /start, вызываем обработчик вручную
+        if update.message and update.message.text == '/start':
+            logger.info("Обнаружено /start, вызываю обработчик вручную")
+            start(update.message)  # прямой вызов
+            return "", 200
+
+        # Для всех остальных обновлений используем стандартный механизм
         bot.process_new_updates([update])
         logger.info("Обработка завершена")
     except Exception as e:
@@ -272,7 +281,7 @@ def set_webhook():
     if not render_url:
         logger.warning("RENDER_EXTERNAL_URL не задан, пропускаем установку webhook")
         return
-    
+
     webhook_url = f"{render_url.rstrip('/')}{WEBHOOK_PATH}"
     logger.info(f"Попытка установить webhook: {webhook_url}")
     bot.remove_webhook()
