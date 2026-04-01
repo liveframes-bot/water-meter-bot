@@ -4,6 +4,7 @@ import requests
 from flask import Flask, request, jsonify
 import telebot
 from telebot.types import Update
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
 
 def get_last_reading():
-    """Делает запрос к скрипту и возвращает словарь с данными"""
+    """Запрашивает последние показания через Apps Script"""
     try:
         resp = requests.get(SCRIPT_URL, params={"action": "get"}, timeout=10)
         resp.raise_for_status()
@@ -31,8 +32,8 @@ def get_last_reading():
         logger.exception("Ошибка при запросе к скрипту")
         return None
 
-@bot.message_handler(commands=['start'])
 def start(message):
+    """Обработчик /start"""
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("📊 Последние показания")
     bot.send_message(
@@ -41,34 +42,36 @@ def start(message):
         reply_markup=markup
     )
 
-@bot.message_handler(func=lambda message: message.text == "📊 Последние показания")
 def show_last(message):
+    """Показывает последние показания"""
     data = get_last_reading()
     if data is None:
         bot.send_message(message.chat.id, "❌ Не удалось получить данные. Попробуйте позже.")
         return
-    # Преобразуем дату из ISO в читаемый формат
+
+    # Преобразование даты
     dt_str = data.get("date", "")
     try:
-        from datetime import datetime
         dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-        dt_local = dt.astimezone()  # в локальное время (для UTC+3, например)
+        dt_local = dt.astimezone()  # в локальное время
         dt_formatted = dt_local.strftime("%d.%m.%Y %H:%M:%S")
     except:
         dt_formatted = dt_str
+
     cold = data.get("cold", 0)
     hot = data.get("hot", 0)
+
     text = f"📊 *Последние показания:*\n\n" \
            f"📅 {dt_formatted}\n" \
            f"❄️ Холодная вода: *{cold:.2f}* м³\n" \
            f"🔥 Горячая вода: *{hot:.2f}* м³"
     bot.send_message(message.chat.id, text, parse_mode="Markdown")
 
-@bot.message_handler(func=lambda message: True)
 def unknown(message):
+    """Ответ на неизвестные сообщения"""
     bot.send_message(message.chat.id, "Используйте кнопку «Последние показания».")
 
-# --- Flask для вебхука ---
+# --- Flask маршруты ---
 @app.route("/", methods=["GET"])
 def health():
     return jsonify({"status": "ok"}), 200
@@ -80,7 +83,14 @@ def webhook():
     try:
         json_str = request.get_data().decode("utf-8")
         update = Update.de_json(json_str)
-        bot.process_new_updates([update])
+        if update.message:
+            msg = update.message
+            if msg.text == '/start':
+                start(msg)
+            elif msg.text == "📊 Последние показания":
+                show_last(msg)
+            else:
+                unknown(msg)
     except Exception as e:
         logger.exception("Ошибка в webhook")
         return "Internal Server Error", 500
