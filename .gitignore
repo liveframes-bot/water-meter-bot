@@ -1,0 +1,6 @@
+__pycache__/
+water_meters.db
+.DS_Store
+venv/
+config.py
+database.py
