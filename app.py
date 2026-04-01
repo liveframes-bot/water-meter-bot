@@ -7,24 +7,31 @@ import telebot
 from telebot.types import Update
 
 # Настройка логирования
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Конфигурация из переменных окружения
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 if not BOT_TOKEN:
+    logger.error("BOT_TOKEN не задан!")
     raise RuntimeError("BOT_TOKEN не задан!")
+logger.info("BOT_TOKEN загружен")
 
 # Flask приложение
 app = Flask(__name__)
 
 # Инициализация бота
 bot = telebot.TeleBot(BOT_TOKEN)
+logger.info("TeleBot инициализирован")
 
-# Путь для веб-хука (с токеном для простой защиты)
+# Путь для веб-хука
 WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
+logger.info(f"Webhook path: {WEBHOOK_PATH}")
 
-# --- Работа с базой данных (копируем из database.py) ---
+# --- Работа с базой данных ---
 DB_NAME = 'water_meters.db'
 
 def init_db():
@@ -51,6 +58,7 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
+    logger.info("База данных инициализирована")
 
 def register_user(user_id, username, full_name):
     conn = sqlite3.connect(DB_NAME)
@@ -116,12 +124,11 @@ def get_history(user_id, water_type, limit=5):
     return history
 
 # --- Обработчики команд бота ---
-
-# Словарь для хранения состояния пользователя
 user_state = {}
 
 @bot.message_handler(commands=['start'])
 def start(message):
+    logger.info(f"Обработчик /start вызван от {message.from_user.id}")
     user_id = message.from_user.id
     username = message.from_user.username
     full_name = message.from_user.full_name
@@ -139,9 +146,11 @@ def start(message):
         f"Привет, {full_name}! 👋\n\nЯ помогу тебе вести учёт показаний счётчиков воды.\nИспользуй кнопки для навигации.",
         reply_markup=markup
     )
+    logger.info(f"Ответ на /start отправлен пользователю {user_id}")
 
 @bot.message_handler(func=lambda message: message.text == "📊 Мои показания")
 def show_readings(message):
+    logger.info(f"Показания запрошены от {message.from_user.id}")
     user_id = message.from_user.id
     cold, hot = get_last_readings(user_id)
     response = "📊 *Последние показания:*\n\n"
@@ -157,6 +166,7 @@ def show_readings(message):
 
 @bot.message_handler(func=lambda message: message.text == "➕ Добавить показания")
 def add_reading_start(message):
+    logger.info(f"Начало добавления показаний от {message.from_user.id}")
     from telebot import types
     markup = types.InlineKeyboardMarkup()
     btn_cold = types.InlineKeyboardButton("❄️ Холодная вода", callback_data="cold")
@@ -178,6 +188,7 @@ def ask_for_value(call):
 
 def save_reading_value(message):
     user_id = message.from_user.id
+    logger.info(f"Сохранение показаний от {user_id}: {message.text}")
     if user_id not in user_state or "water_type" not in user_state[user_id]:
         bot.send_message(message.chat.id, "Произошла ошибка. Попробуйте снова.")
         return
@@ -200,6 +211,7 @@ def save_reading_value(message):
 
 @bot.message_handler(func=lambda message: message.text == "📜 История")
 def show_history_menu(message):
+    logger.info(f"История запрошена от {message.from_user.id}")
     from telebot import types
     markup = types.InlineKeyboardMarkup()
     btn_cold = types.InlineKeyboardButton("❄️ Холодная вода", callback_data="hist_cold")
@@ -224,34 +236,42 @@ def show_history(call):
 
 @bot.message_handler(func=lambda message: True)
 def handle_unknown(message):
+    logger.info(f"Неизвестное сообщение от {message.from_user.id}: {message.text}")
     bot.send_message(message.chat.id, "Используйте кнопки меню для работы с ботом.")
 
 # --- Flask маршруты ---
-
 @app.route("/", methods=["GET"])
 def health():
-    """Health check для Render"""
     return jsonify({"status": "ok"}), 200
 
 @app.route(WEBHOOK_PATH, methods=["POST"])
 def webhook():
-    """Приём веб-хуков от Telegram"""
+    logger.info("Webhook запрос получен")
     if request.headers.get("content-type") != "application/json":
+        logger.warning("Неверный content-type: %s", request.headers.get("content-type"))
         return "Unsupported Media Type", 415
     
-    json_str = request.get_data().decode("utf-8")
-    update = Update.de_json(json_str)
-    bot.process_new_updates([update])
+    try:
+        json_str = request.get_data().decode("utf-8")
+        logger.info(f"Тело запроса: {json_str[:200]}")  # Логируем первые 200 символов
+        update = Update.de_json(json_str)
+        logger.info("Update объект создан, передаю в бота")
+        bot.process_new_updates([update])
+        logger.info("Обработка завершена")
+    except Exception as e:
+        logger.exception("Ошибка при обработке webhook")
+        return "Internal Server Error", 500
+    
     return "", 200
 
 def set_webhook():
-    """Установка веб-хука при старте"""
     render_url = os.environ.get("RENDER_EXTERNAL_URL")
     if not render_url:
         logger.warning("RENDER_EXTERNAL_URL не задан, пропускаем установку webhook")
         return
     
     webhook_url = f"{render_url.rstrip('/')}{WEBHOOK_PATH}"
+    logger.info(f"Попытка установить webhook: {webhook_url}")
     bot.remove_webhook()
     result = bot.set_webhook(url=webhook_url)
     if result:
@@ -259,9 +279,11 @@ def set_webhook():
     else:
         logger.error("Ошибка установки webhook")
 
-# Инициализация
+# --- Инициализация при старте ---
+logger.info("Инициализация приложения...")
 init_db()
 set_webhook()
+logger.info("Приложение готово к работе")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
