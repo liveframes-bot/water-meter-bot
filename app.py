@@ -248,20 +248,23 @@ def health():
 def webhook():
     logger.info("Webhook запрос получен")
     if request.headers.get("content-type") != "application/json":
-        logger.warning("Неверный content-type: %s", request.headers.get("content-type"))
+        logger.warning("Неверный content-type")
         return "Unsupported Media Type", 415
-    
+
     try:
         json_str = request.get_data().decode("utf-8")
-        logger.info(f"Тело запроса: {json_str[:200]}")  # Логируем первые 200 символов
+        logger.info(f"Полный JSON: {json_str}")  # выводим полностью
         update = Update.de_json(json_str)
-        logger.info("Update объект создан, передаю в бота")
+        logger.info(f"Update объект: {update}")  # объект целиком
+        logger.info(f"Тип update: {type(update)}")
+        if update.message:
+            logger.info(f"Сообщение от {update.message.from_user.id}: {update.message.text}")
         bot.process_new_updates([update])
         logger.info("Обработка завершена")
     except Exception as e:
-        logger.exception("Ошибка при обработке webhook")
+        logger.exception("Ошибка в webhook")
         return "Internal Server Error", 500
-    
+
     return "", 200
 
 def set_webhook():
