@@ -123,11 +123,10 @@ def get_history(user_id, water_type, limit=5):
     conn.close()
     return history
 
-# --- Обработчики команд бота ---
+# --- Обработчики (функции) ---
 user_state = {}
 
-@bot.message_handler(commands=['start'])
-def start(message):
+def start_handler(message):
     logger.info(f"Обработчик /start вызван от {message.from_user.id}")
     user_id = message.from_user.id
     username = message.from_user.username
@@ -148,8 +147,7 @@ def start(message):
     )
     logger.info(f"Ответ на /start отправлен пользователю {user_id}")
 
-@bot.message_handler(func=lambda message: message.text == "📊 Мои показания")
-def show_readings(message):
+def show_readings_handler(message):
     logger.info(f"Показания запрошены от {message.from_user.id}")
     user_id = message.from_user.id
     cold, hot = get_last_readings(user_id)
@@ -164,8 +162,7 @@ def show_readings(message):
         response += "🔥 Горячая вода: *нет данных*\n"
     bot.send_message(message.chat.id, response, parse_mode="Markdown")
 
-@bot.message_handler(func=lambda message: message.text == "➕ Добавить показания")
-def add_reading_start(message):
+def add_reading_start_handler(message):
     logger.info(f"Начало добавления показаний от {message.from_user.id}")
     from telebot import types
     markup = types.InlineKeyboardMarkup()
@@ -174,8 +171,7 @@ def add_reading_start(message):
     markup.add(btn_cold, btn_hot)
     bot.send_message(message.chat.id, "Выберите тип счётчика:", reply_markup=markup)
 
-@bot.callback_query_handler(func=lambda call: call.data in ["cold", "hot"])
-def ask_for_value(call):
+def ask_for_value_handler(call):
     water_type = call.data
     user_state[call.from_user.id] = {"water_type": water_type}
     type_name = "❄️ ХОЛОДНОЙ" if water_type == "cold" else "🔥 ГОРЯЧЕЙ"
@@ -209,8 +205,7 @@ def save_reading_value(message):
         bot.send_message(message.chat.id, f"⚠️ Вы уже отправляли показания для {type_name} воды сегодня.\nМожно отправлять не чаще 1 раза в день.")
     del user_state[user_id]
 
-@bot.message_handler(func=lambda message: message.text == "📜 История")
-def show_history_menu(message):
+def show_history_menu_handler(message):
     logger.info(f"История запрошена от {message.from_user.id}")
     from telebot import types
     markup = types.InlineKeyboardMarkup()
@@ -219,8 +214,7 @@ def show_history_menu(message):
     markup.add(btn_cold, btn_hot)
     bot.send_message(message.chat.id, "Выберите счётчик для просмотра истории:", reply_markup=markup)
 
-@bot.callback_query_handler(func=lambda call: call.data in ["hist_cold", "hist_hot"])
-def show_history(call):
+def show_history_handler(call):
     user_id = call.from_user.id
     water_type = "cold" if call.data == "hist_cold" else "hot"
     type_name = "Холодная вода" if water_type == "cold" else "Горячая вода"
@@ -234,14 +228,9 @@ def show_history(call):
             text += f"📅 {date}: *{value}* м³\n"
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode="Markdown")
 
-@bot.message_handler(func=lambda message: True)
-def handle_unknown(message):
+def unknown_handler(message):
     logger.info(f"Неизвестное сообщение от {message.from_user.id}: {message.text}")
     bot.send_message(message.chat.id, "Используйте кнопки меню для работы с ботом.")
-
-# Логируем количество зарегистрированных обработчиков после их определения
-logger.info(f"Всего обработчиков сообщений: {len(bot.message_handlers)}")
-logger.info(f"Всего callback-обработчиков: {len(bot.callback_query_handlers)}")
 
 # --- Flask маршруты ---
 @app.route("/", methods=["GET"])
@@ -261,15 +250,34 @@ def webhook():
         update = Update.de_json(json_str)
         logger.info("Update объект создан")
 
-        # Если это сообщение с командой /start, вызываем обработчик вручную
-        if update.message and update.message.text == '/start':
-            logger.info("Обнаружено /start, вызываю обработчик вручную")
-            start(update.message)  # прямой вызов
-            return "", 200
+        # Обработка сообщений
+        if update.message:
+            text = update.message.text
+            if text == '/start':
+                start_handler(update.message)
+            elif text == "📊 Мои показания":
+                show_readings_handler(update.message)
+            elif text == "➕ Добавить показания":
+                add_reading_start_handler(update.message)
+            elif text == "📜 История":
+                show_history_menu_handler(update.message)
+            else:
+                unknown_handler(update.message)
+        
+        # Обработка callback_query
+        elif update.callback_query:
+            data = update.callback_query.data
+            if data in ["cold", "hot"]:
+                ask_for_value_handler(update.callback_query)
+            elif data in ["hist_cold", "hist_hot"]:
+                show_history_handler(update.callback_query)
+            else:
+                logger.warning(f"Неизвестный callback: {data}")
+        
+        # Обработка других типов обновлений (если нужно)
+        else:
+            logger.info(f"Получено обновление другого типа: {update}")
 
-        # Для всех остальных обновлений используем стандартный механизм
-        bot.process_new_updates([update])
-        logger.info("Обработка завершена")
     except Exception as e:
         logger.exception("Ошибка в webhook")
         return "Internal Server Error", 500
