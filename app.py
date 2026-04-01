@@ -21,7 +21,6 @@ bot = telebot.TeleBot(BOT_TOKEN)
 WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
 
 def get_last_reading():
-    """Запрашивает последние показания через Apps Script"""
     try:
         resp = requests.get(SCRIPT_URL, params={"action": "get"}, timeout=10)
         resp.raise_for_status()
@@ -33,7 +32,6 @@ def get_last_reading():
         return None
 
 def start(message):
-    """Обработчик /start"""
     markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("📊 Последние показания")
     bot.send_message(
@@ -43,13 +41,11 @@ def start(message):
     )
 
 def show_last(message):
-    """Показывает последние показания"""
     data = get_last_reading()
     if data is None:
         bot.send_message(message.chat.id, "❌ Не удалось получить данные. Попробуйте позже.")
         return
 
-    # Преобразование даты
     dt_str = data.get("date", "")
     try:
         dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
@@ -68,10 +64,8 @@ def show_last(message):
     bot.send_message(message.chat.id, text, parse_mode="Markdown")
 
 def unknown(message):
-    """Ответ на неизвестные сообщения"""
     bot.send_message(message.chat.id, "Используйте кнопку «Последние показания».")
 
-# --- Flask маршруты ---
 @app.route("/", methods=["GET"])
 def health():
     return jsonify({"status": "ok"}), 200
