@@ -90,6 +90,12 @@ def webhook():
         return "Internal Server Error", 500
     return "", 200
 
+# ========== ДОБАВЛЕН МАРШРУТ ДЛЯ ПИНГА ==========
+@app.route('/ping', methods=['GET'])
+def ping():
+    return "OK", 200
+# ===============================================
+
 def set_webhook():
     render_url = os.environ.get("RENDER_EXTERNAL_URL")
     if not render_url:
