@@ -7,11 +7,9 @@ from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
 
-print("=== RENDER VERSION V3 STARTED ===")
+print("=== LOCAL V3 STARTED ===")
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN is not set")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8685560726:AAHotIeeLzP7v4dmMOQ6WIZtnB4WnLa8ij8")
 
 bot = Bot(
     token=BOT_TOKEN,
@@ -23,7 +21,7 @@ dp = Dispatcher()
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
     await message.answer(
-        "V3 OK\n"
+        "LOCAL V3 /start\n"
         "Команды:\n"
         "/start\n"
         "/id"
@@ -32,7 +30,7 @@ async def cmd_start(message: Message):
 @dp.message(Command("id"))
 async def cmd_id(message: Message):
     await message.answer(
-        f"V3 ID = <code>{message.from_user.id}</code>\n"
+        f"LOCAL V3 ID = <code>{message.from_user.id}</code>\n"
         f"CHAT = <code>{message.chat.id}</code>\n"
         f"USER = <code>{message.from_user.username or 'none'}</code>"
     )
