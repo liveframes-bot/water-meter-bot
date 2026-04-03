@@ -7,6 +7,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
+from aiohttp import web
 
 print("=== RENDER V3 STARTED ===")
 
@@ -14,13 +15,9 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not set")
 
-# WHITELIST — только этот user_id может пользоваться ботом
 ALLOWED_USER_ID = 380718700
 
-# URL твоего Google Apps Script
 APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzzFf3uHEFQ0vqTJq5WR6ASVeI72Q9Rt-s49LzaWbRBRHgC6P2eEHZUkfcRNweyljf7/exec"
-
-# Токен для доступа к Apps Script
 APPS_SCRIPT_TOKEN = "water_2026_secret"
 
 bot = Bot(
@@ -32,12 +29,10 @@ dp = Dispatcher()
 
 
 def is_allowed(message: Message) -> bool:
-    """Проверка: разрешён ли пользователь"""
     return message.from_user.id == ALLOWED_USER_ID
 
 
 async def get_readings_from_script() -> str:
-    """Дёргает Google Apps Script и возвращает показания"""
     async with httpx.AsyncClient(timeout=30.0) as client:
         params = {"action": "get", "token": APPS_SCRIPT_TOKEN}
         try:
@@ -89,8 +84,20 @@ async def cmd_status(message: Message):
     )
 
 
+async def health_check(request):
+    return web.Response(text="OK")
+
+
 async def main():
     await bot.delete_webhook(drop_pending_updates=False)
+    
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 10000)
+    await site.start()
+    
     await dp.start_polling(bot)
 
 
