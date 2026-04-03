@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 from aiohttp import web
 
 print("=== RENDER V3 STARTED ===")
@@ -17,7 +17,10 @@ if not BOT_TOKEN:
 
 ALLOWED_USER_ID = 380718700
 
-APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzzFf3uHEFQ0vqTJq5WR6ASVeI72Q9Rt-s49LzaWbRBRHgC6P2eEHZUkfcRNweyljf7/exec"
+APPS_SCRIPT_URL = (
+    "https://script.google.com/macros/s/"
+    "AKfycbzzFf3uHEFQ0vqTJq5WR6ASVeI72Q9Rt-s49LzaWbRBRHgC6P2eEHZUkfcRNweyljf7/exec"
+)
 APPS_SCRIPT_TOKEN = "water_2026_secret"
 
 bot = Bot(
@@ -55,12 +58,25 @@ async def get_readings_from_script() -> str:
 async def cmd_start(message: Message):
     if not is_allowed(message):
         return
+
+    kb = ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text="📊 Текущие показания"),
+                KeyboardButton(text="🔄 Обновить"),
+            ],
+            [
+                KeyboardButton(text="ℹ️ Помощь"),
+            ],
+        ],
+        resize_keyboard=True
+    )
+
     await message.answer(
         "V3 OK\n"
-        "Команды:\n"
-        "/start\n"
-        "/id\n"
-        "/status"
+        "Я показываю показания счётчиков из Google Таблицы.\n"
+        "Используй кнопки или команды /status, /id.",
+        reply_markup=kb
     )
 
 
@@ -86,15 +102,29 @@ async def cmd_status(message: Message):
     )
 
 
+@dp.message()
+async def on_buttons(message: Message):
+    if not is_allowed(message):
+        return
+
+    if message.text in ("📊 Текущие показания", "🔄 Обновить"):
+        await cmd_status(message)
+    elif message.text == "ℹ️ Помощь":
+        await message.answer(
+            "Команды:\n"
+            "/status — получить текущие показания\n"
+            "/id — показать техническую информацию\n\n"
+            "Кнопки делают то же самое, без ввода слэшей."
+        )
+
+
 async def health_check(request):
     return web.Response(text="OK")
 
 
 async def main():
-    # снимаем webhook, чтобы точно работал polling
     await bot.delete_webhook(drop_pending_updates=False)
 
-    # простой health-check сервер для Render
     app = web.Application()
     app.router.add_get("/", health_check)
     runner = web.AppRunner(app)
@@ -102,7 +132,6 @@ async def main():
     site = web.TCPSite(runner, "0.0.0.0", 10000)
     await site.start()
 
-    # запускаем polling
     await dp.start_polling(bot)
 
 
