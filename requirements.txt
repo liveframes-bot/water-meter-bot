@@ -1,4 +1,3 @@
-pyTelegramBotAPI==4.16.0
-Flask==3.0.0
-gunicorn==21.2.0
-requests==2.33.1
+aiogram==3.13.1
+aiohttp
+certifi
