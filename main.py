@@ -15,11 +15,15 @@ from aiogram.types import (
 )
 from aiohttp import web
 
-print("=== WATER BOT V5 STARTED ===")
+print("=== WATER BOT V6 STARTED ===")
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not set")
+
+APPS_SCRIPT_TOKEN = os.getenv("APPS_SCRIPT_TOKEN")
+if not APPS_SCRIPT_TOKEN:
+    raise RuntimeError("APPS_SCRIPT_TOKEN is not set")
 
 ALLOWED_USER_ID = 380718700
 
@@ -27,7 +31,6 @@ APPS_SCRIPT_URL = (
     "https://script.google.com/macros/s/"
     "AKfycbzzFf3uHEFQ0vqTJq5WR6ASVeI72Q9Rt-s49LzaWbRBRHgC6P2eEHZUkfcRNweyljf7/exec"
 )
-APPS_SCRIPT_TOKEN = os.getenv("APPS_SCRIPT_TOKEN", "water_2026_secret")
 
 bot = Bot(
     token=BOT_TOKEN,
@@ -53,6 +56,7 @@ def main_keyboard() -> ReplyKeyboardMarkup:
                 KeyboardButton(text="🆔 ID"),
             ],
             [
+                KeyboardButton(text="📋 Меню"),
                 KeyboardButton(text="❌ Скрыть"),
             ],
         ],
@@ -78,6 +82,7 @@ async def get_readings_from_script() -> str:
             "action": "get",
             "token": APPS_SCRIPT_TOKEN,
         }
+
         try:
             resp = await client.get(APPS_SCRIPT_URL, params=params)
             resp.raise_for_status()
@@ -96,6 +101,7 @@ async def get_readings_from_script() -> str:
                 f"♨️ Горячая: <b>{hot}</b>\n"
                 f"📅 Дата: <b>{date}</b>"
             )
+
         except Exception as e:
             return f"❗ Ошибка: <code>{type(e).__name__}: {e}</code>"
 
@@ -121,6 +127,7 @@ async def cmd_start(message: Message):
 async def cmd_menu(message: Message):
     if not is_allowed(message):
         return
+
     await send_menu(message)
 
 
@@ -134,6 +141,7 @@ async def cmd_help(message: Message):
         "📊 Показания — запросить данные из Google Таблицы\n"
         "🔄 Обновить — повторить запрос\n"
         "🆔 ID — показать техническую информацию\n"
+        "📋 Меню — снова показать кнопки\n"
         "❌ Скрыть — убрать нижнюю клавиатуру\n\n"
         "Команды:\n"
         "/start\n"
@@ -166,7 +174,11 @@ async def cmd_status(message: Message):
     if not is_allowed(message):
         return
 
-    progress = await message.answer("⏳ Загружаю показания...", reply_markup=main_keyboard())
+    progress = await message.answer(
+        "⏳ Загружаю показания...",
+        reply_markup=main_keyboard()
+    )
+
     readings = await get_readings_from_script()
 
     try:
@@ -188,6 +200,8 @@ async def on_buttons(message: Message):
         await cmd_help(message)
     elif text == "🆔 ID":
         await cmd_id(message)
+    elif text == "📋 Меню":
+        await cmd_menu(message)
     elif text == "❌ Скрыть":
         await message.answer(
             "Клавиатура скрыта.\nЧтобы вернуть её, отправьте /menu",
