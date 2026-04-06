@@ -13,10 +13,9 @@ from aiogram.types import (
     Message,
     ReplyKeyboardMarkup,
     KeyboardButton,
-    BotCommand,
 )
 
-print("=== WATER BOT V7 STARTED ===")
+print("=== WATER BOT FINAL STARTED ===")
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
@@ -56,9 +55,6 @@ def main_keyboard() -> ReplyKeyboardMarkup:
                 KeyboardButton(text="ℹ️ Помощь"),
                 KeyboardButton(text="🆔 ID"),
             ],
-            [
-                KeyboardButton(text="📋 Меню"),
-            ],
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -74,16 +70,6 @@ def format_moscow_time(iso_string: str) -> str:
         return dt_msk.strftime("%d.%m.%Y %H:%M:%S")
     except Exception:
         return iso_string
-
-
-async def setup_bot_commands() -> None:
-    await bot.set_my_commands([
-        BotCommand(command="start", description="Запуск"),
-        BotCommand(command="menu", description="Показать клавиатуру"),
-        BotCommand(command="status", description="Показать показания"),
-        BotCommand(command="help", description="Помощь"),
-        BotCommand(command="id", description="Мой ID и chat ID"),
-    ])
 
 
 async def get_readings_from_script() -> str:
@@ -117,10 +103,6 @@ async def get_readings_from_script() -> str:
             return f"❗ Ошибка: <code>{type(e).__name__}: {e}</code>"
 
 
-async def send_menu(message: Message, text: str = "📋 Главное меню") -> None:
-    await message.answer(text, reply_markup=main_keyboard())
-
-
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
     if not is_allowed(message):
@@ -129,52 +111,7 @@ async def cmd_start(message: Message):
     await message.answer(
         "Привет.\n"
         "Я показываю показания счётчиков из Google Таблицы.\n\n"
-        "Кнопки всегда доступны снизу.",
-        reply_markup=main_keyboard()
-    )
-
-
-@dp.message(Command("menu"))
-async def cmd_menu(message: Message):
-    if not is_allowed(message):
-        return
-
-    await send_menu(message)
-
-
-@dp.message(Command("help"))
-async def cmd_help(message: Message):
-    if not is_allowed(message):
-        return
-
-    await message.answer(
-        "ℹ️ <b>Что умеет бот</b>\n\n"
-        "📊 Показания — запросить данные из Google Таблицы\n"
-        "🔄 Обновить — повторить запрос\n"
-        "🆔 ID — показать техническую информацию\n"
-        "📋 Меню — снова показать кнопки\n\n"
-        "Команды:\n"
-        "/start\n"
-        "/menu\n"
-        "/status\n"
-        "/help\n"
-        "/id",
-        reply_markup=main_keyboard()
-    )
-
-
-@dp.message(Command("id"))
-async def cmd_id(message: Message):
-    if not is_allowed(message):
-        return
-
-    username = message.from_user.username or "none"
-
-    await message.answer(
-        "🆔 <b>Техническая информация</b>\n\n"
-        f"USER ID: <code>{message.from_user.id}</code>\n"
-        f"CHAT ID: <code>{message.chat.id}</code>\n"
-        f"USERNAME: <code>{username}</code>",
+        "Используйте кнопки снизу.",
         reply_markup=main_keyboard()
     )
 
@@ -197,6 +134,36 @@ async def cmd_status(message: Message):
         await message.answer(readings, reply_markup=main_keyboard())
 
 
+@dp.message(Command("help"))
+async def cmd_help(message: Message):
+    if not is_allowed(message):
+        return
+
+    await message.answer(
+        "ℹ️ <b>Помощь</b>\n\n"
+        "📊 Показания — получить текущие данные\n"
+        "🔄 Обновить — обновить показания\n"
+        "🆔 ID — показать техническую информацию",
+        reply_markup=main_keyboard()
+    )
+
+
+@dp.message(Command("id"))
+async def cmd_id(message: Message):
+    if not is_allowed(message):
+        return
+
+    username = message.from_user.username or "none"
+
+    await message.answer(
+        "🆔 <b>Техническая информация</b>\n\n"
+        f"USER ID: <code>{message.from_user.id}</code>\n"
+        f"CHAT ID: <code>{message.chat.id}</code>\n"
+        f"USERNAME: <code>{username}</code>",
+        reply_markup=main_keyboard()
+    )
+
+
 @dp.message()
 async def on_buttons(message: Message):
     if not is_allowed(message):
@@ -210,11 +177,9 @@ async def on_buttons(message: Message):
         await cmd_help(message)
     elif text == "🆔 ID":
         await cmd_id(message)
-    elif text == "📋 Меню":
-        await cmd_menu(message)
     else:
         await message.answer(
-            "Не понял запрос.\nНажмите кнопку ниже или отправьте /menu",
+            "Нажмите кнопку ниже.",
             reply_markup=main_keyboard()
         )
 
@@ -225,7 +190,7 @@ async def health_check(request):
 
 async def main():
     await bot.delete_webhook(drop_pending_updates=False)
-    await setup_bot_commands()
+    await bot.delete_my_commands()
 
     app = web.Application()
     app.router.add_get("/", health_check)
