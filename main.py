@@ -1,7 +1,10 @@
 import asyncio
 import os
-import httpx
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
+import httpx
+from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -10,12 +13,10 @@ from aiogram.types import (
     Message,
     ReplyKeyboardMarkup,
     KeyboardButton,
-    ReplyKeyboardRemove,
     BotCommand,
 )
-from aiohttp import web
 
-print("=== WATER BOT V6 STARTED ===")
+print("=== WATER BOT V7 STARTED ===")
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
@@ -57,13 +58,22 @@ def main_keyboard() -> ReplyKeyboardMarkup:
             ],
             [
                 KeyboardButton(text="📋 Меню"),
-                KeyboardButton(text="❌ Скрыть"),
             ],
         ],
         resize_keyboard=True,
         is_persistent=True,
+        one_time_keyboard=False,
         input_field_placeholder="Нажмите кнопку"
     )
+
+
+def format_moscow_time(iso_string: str) -> str:
+    try:
+        dt = datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
+        dt_msk = dt.astimezone(ZoneInfo("Europe/Moscow"))
+        return dt_msk.strftime("%d.%m.%Y %H:%M:%S")
+    except Exception:
+        return iso_string
 
 
 async def setup_bot_commands() -> None:
@@ -93,13 +103,14 @@ async def get_readings_from_script() -> str:
 
             cold = data.get("cold", "—")
             hot = data.get("hot", "—")
-            date = data.get("date", "—")
+            raw_date = data.get("date", "—")
+            pretty_date = format_moscow_time(raw_date) if raw_date != "—" else "—"
 
             return (
                 "📊 <b>Текущие показания</b>\n\n"
                 f"🚿 Холодная: <b>{cold}</b>\n"
                 f"♨️ Горячая: <b>{hot}</b>\n"
-                f"📅 Дата: <b>{date}</b>"
+                f"🗓 <b>{pretty_date}</b>"
             )
 
         except Exception as e:
@@ -118,7 +129,7 @@ async def cmd_start(message: Message):
     await message.answer(
         "Привет.\n"
         "Я показываю показания счётчиков из Google Таблицы.\n\n"
-        "Используйте кнопки снизу.",
+        "Кнопки всегда доступны снизу.",
         reply_markup=main_keyboard()
     )
 
@@ -141,8 +152,7 @@ async def cmd_help(message: Message):
         "📊 Показания — запросить данные из Google Таблицы\n"
         "🔄 Обновить — повторить запрос\n"
         "🆔 ID — показать техническую информацию\n"
-        "📋 Меню — снова показать кнопки\n"
-        "❌ Скрыть — убрать нижнюю клавиатуру\n\n"
+        "📋 Меню — снова показать кнопки\n\n"
         "Команды:\n"
         "/start\n"
         "/menu\n"
@@ -182,7 +192,7 @@ async def cmd_status(message: Message):
     readings = await get_readings_from_script()
 
     try:
-        await progress.edit_text(readings)
+        await progress.edit_text(readings, reply_markup=main_keyboard())
     except Exception:
         await message.answer(readings, reply_markup=main_keyboard())
 
@@ -202,11 +212,6 @@ async def on_buttons(message: Message):
         await cmd_id(message)
     elif text == "📋 Меню":
         await cmd_menu(message)
-    elif text == "❌ Скрыть":
-        await message.answer(
-            "Клавиатура скрыта.\nЧтобы вернуть её, отправьте /menu",
-            reply_markup=ReplyKeyboardRemove()
-        )
     else:
         await message.answer(
             "Не понял запрос.\nНажмите кнопку ниже или отправьте /menu",
